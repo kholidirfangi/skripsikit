@@ -108,8 +108,8 @@ def setup_chapter_section(section, is_first_chapter):
 def configure_page_numbers(doc, section_points):
     """
     Petakan tiap heading BAB langsung ke section index yang memuatnya,
-    dengan menelusuri dokumen paragraph-per-paragraph -- lebih robust
-    dibanding menghitung lewat rumus posisi.
+    lalu terapkan format. Return ringkasan (list of dict) untuk
+    ditampilkan ke user di web -- pengganti print ke terminal CLI.
     """
     sections = doc.sections
     point_by_index = {p['index']: p for p in section_points}
@@ -123,17 +123,25 @@ def configure_page_numbers(doc, section_points):
         if pPr is not None and pPr.find(qn('w:sectPr')) is not None:
             current_section += 1
 
+    summary = []
     if not mapped:
-        print("✗ Tidak ada section yang berhasil terpetakan, proses dihentikan.")
-        return
+        return summary
 
     first_chapter_section = mapped[0][1]
 
     for i in range(0, first_chapter_section):
         setup_preliminary(sections[i], restart=(i == 0))
-    print(f"✓ Section 0-{first_chapter_section - 1} (Preliminary) → Roman, footer center")
+    summary.append({
+        "label": "Bagian awal dokumen (sebelum BAB I)",
+        "format": "Angka Romawi (i, ii, iii, ...) — posisi bawah tengah",
+    })
 
     for pos, (point, idx) in enumerate(mapped):
         is_first = (pos == 0)
         setup_chapter_section(sections[idx], is_first_chapter=is_first)
-        print(f"✓ {point['text']:30} → Arabic (section {idx})")
+        summary.append({
+            "label": point['text'].replace('\n', ' '),
+            "format": "Angka Arab — halaman pertama bawah tengah, halaman berikutnya kanan atas",
+        })
+
+    return summary

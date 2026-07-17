@@ -50,23 +50,30 @@ async def detect(file: UploadFile = File(...)):
         "section_points": section_points,
     })
 
-
 @app.post("/api/process")
 async def process(file_id: str = Form(...), safe_path: str = Form(...), section_points: str = Form(...)):
-    """
-    Tahap 2: terima daftar section point YANG SUDAH DIKOREKSI user
-    (pengganti command hapus/tambah/lanjut), proses, balikin file hasil.
-    """
     import json
     final_points = json.loads(section_points)
 
     doc = Document(safe_path)
 
     create_section_breaks(doc, final_points)
-    configure_page_numbers(doc, final_points)
+    summary = configure_page_numbers(doc, final_points)
 
     output_path = os.path.join(TEMP_DIR, f"{file_id}_formatted.docx")
     doc.save(output_path)
+
+    return JSONResponse({
+        "file_id": file_id,
+        "summary": summary,
+    })
+
+
+@app.get("/api/download/{file_id}")
+async def download(file_id: str):
+    output_path = os.path.join(TEMP_DIR, f"{file_id}_formatted.docx")
+    if not os.path.exists(output_path):
+        return JSONResponse({"error": "File tidak ditemukan atau sudah kedaluwarsa"}, status_code=404)
 
     return FileResponse(
         output_path,
