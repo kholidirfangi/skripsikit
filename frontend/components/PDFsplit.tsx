@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
 import JSZip from "jszip";
 import type * as PdfJsLib from "pdfjs-dist";
+import { Trash2, Upload } from "lucide-react";
 
 // ---------------------------------------------------------------------------
 // Polyfill Uint8Array.toHex/toBase64 (dibutuhkan pdfjs-dist 5.x)
@@ -344,7 +345,9 @@ function scoreLampiranPage(lines: PageLines): number {
 
   const top = lines.slice(0, 25);
   for (let i = 0; i < top.length; i++) {
-    if (/^LAMPIRAN(?:\s+[A-Z]|\s+\d{1,3})?$/.test(normalizeHeadingText(top[i]))) {
+    if (
+      /^LAMPIRAN(?:\s+[A-Z]|\s+\d{1,3})?$/.test(normalizeHeadingText(top[i]))
+    ) {
       if (i <= 5) score += 4;
       else if (i <= 10) score += 2;
       break;
@@ -447,7 +450,10 @@ function scoreAppendixTransition(
   return score;
 }
 
-function findLampiranPage(pages: PageLines[], startPage: number): number | null {
+function findLampiranPage(
+  pages: PageLines[],
+  startPage: number,
+): number | null {
   const total = pages.length;
   if (total === 0) return null;
 
@@ -682,10 +688,17 @@ export default function PDFsplit() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <div>
-        <label className="block border-2 border-dashed rounded-lg p-8 text-center cursor-pointer text-sm text-gray-500">
-          Klik atau pilih file PDF skripsi
+    <div className="max-w-4xl mx-auto px-6 pb-10">
+      <h1 className="text-2xl font-bold text-center">Split Skripsi per BAB</h1>
+      <p className="text-center text-sm text-gray-500 mb-5">
+        Pisahkan skripsi Anda berdasarkan bab dalam sekali klik
+      </p>
+      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+        <label className="cursor-pointer flex flex-col items-center gap-4 py-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors">
+          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+            <Upload className="w-6 h-6 text-slate-500" />
+          </div>
+          <p>Klik atau pilih file PDF skripsi</p>
           <input
             type="file"
             accept="application/pdf"
@@ -699,7 +712,7 @@ export default function PDFsplit() {
       </div>
 
       {sections.length > 0 && (
-        <div className="border rounded-lg p-4 space-y-3">
+        <div className="border rounded-lg p-4 space-y-3 mt-5">
           <p className="font-medium text-sm">
             Struktur terdeteksi (edit bila perlu)
           </p>
@@ -710,7 +723,7 @@ export default function PDFsplit() {
                   <th className="py-1">Nama</th>
                   <th className="py-1">Dari</th>
                   <th className="py-1">Sampai</th>
-                  <th></th>
+                  <th className="py-1">Aksi</th>
                 </tr>
               </thead>
               <tbody>
@@ -752,7 +765,7 @@ export default function PDFsplit() {
                     <td>
                       <button
                         onClick={() => removeSection(i)}
-                        className="text-xs text-red-500"
+                        className="text-xs bg-red-500 text-white px-2 py-1 rounded-md my-2"
                       >
                         Hapus
                       </button>

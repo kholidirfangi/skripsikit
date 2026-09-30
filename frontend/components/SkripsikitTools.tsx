@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
+import { useState } from "react";
 import {
   Upload,
   FileText,
@@ -9,26 +9,31 @@ import {
   Loader2,
   Trash2,
   Download,
-} from 'lucide-react';
-import { SectionPoint, DetectResponse, SummaryItem, Step } from '@/app/lib/types';
-import StepIndicator from './StepIndicator';
+} from "lucide-react";
+import {
+  SectionPoint,
+  DetectResponse,
+  SummaryItem,
+  Step,
+} from "@/app/lib/types";
+import StepIndicator from "./StepIndicator";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
-const confidenceStyle: Record<SectionPoint['confidence'], string> = {
-  tinggi: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  sedang: 'bg-amber-50 text-amber-700 border-amber-200',
-  RENDAH: 'bg-red-50 text-red-700 border-red-200',
-  manual: 'bg-blue-50 text-blue-700 border-blue-200',
+const confidenceStyle: Record<SectionPoint["confidence"], string> = {
+  tinggi: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  sedang: "bg-amber-50 text-amber-700 border-amber-200",
+  RENDAH: "bg-red-50 text-red-700 border-red-200",
+  manual: "bg-blue-50 text-blue-700 border-blue-200",
 };
 
-const typeLabel: Record<SectionPoint['type'], string> = {
-  BAB: 'Bab',
-  BACK_MATTER: 'Lampiran/Pustaka',
+const typeLabel: Record<SectionPoint["type"], string> = {
+  BAB: "Bab",
+  BACK_MATTER: "Lampiran/Pustaka",
 };
 
 export default function SkripsiKitTool() {
-  const [step, setStep] = useState<Step>('upload');
+  const [step, setStep] = useState<Step>("upload");
   const [file, setFile] = useState<File | null>(null);
   const [detecting, setDetecting] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -38,7 +43,7 @@ export default function SkripsiKitTool() {
   const [error, setError] = useState<string | null>(null);
 
   function resetAll() {
-    setStep('upload');
+    setStep("upload");
     setFile(null);
     setDetectResult(null);
     setSectionPoints([]);
@@ -53,26 +58,33 @@ export default function SkripsiKitTool() {
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append("file", file);
 
       const res = await fetch(`${API_URL}/api/detect`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Gagal membaca struktur dokumen. Pastikan file .docx valid.');
+      if (!res.ok)
+        throw new Error(
+          "Gagal membaca struktur dokumen. Pastikan file .docx valid.",
+        );
 
       const data: DetectResponse = await res.json();
 
       if (!data.section_points || data.section_points.length === 0) {
-        setError('Tidak ada BAB/Daftar Pustaka terdeteksi otomatis. Coba periksa format heading di dokumen kamu.');
+        setError(
+          "Tidak ada BAB/Daftar Pustaka terdeteksi otomatis. Coba periksa format heading di dokumen kamu.",
+        );
       }
 
       setDetectResult(data);
       setSectionPoints(data.section_points ?? []);
-      setStep('review');
+      setStep("review");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan tak terduga.');
+      setError(
+        err instanceof Error ? err.message : "Terjadi kesalahan tak terduga.",
+      );
     } finally {
       setDetecting(false);
     }
@@ -89,22 +101,24 @@ export default function SkripsiKitTool() {
 
     try {
       const formData = new FormData();
-      formData.append('file_id', detectResult.file_id);
-      formData.append('safe_path', detectResult.safe_path);
-      formData.append('section_points', JSON.stringify(sectionPoints));
+      formData.append("file_id", detectResult.file_id);
+      formData.append("safe_path", detectResult.safe_path);
+      formData.append("section_points", JSON.stringify(sectionPoints));
 
       const res = await fetch(`${API_URL}/api/process`, {
-        method: 'POST',
+        method: "POST",
         body: formData,
       });
 
-      if (!res.ok) throw new Error('Gagal memproses dokumen.');
+      if (!res.ok) throw new Error("Gagal memproses dokumen.");
 
       const data = await res.json();
       setSummary(data.summary ?? []);
-      setStep('done');
+      setStep("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Terjadi kesalahan tak terduga.');
+      setError(
+        err instanceof Error ? err.message : "Terjadi kesalahan tak terduga.",
+      );
     } finally {
       setProcessing(false);
     }
@@ -114,9 +128,9 @@ export default function SkripsiKitTool() {
     if (!detectResult) return;
     const downloadUrl = `${API_URL}/api/download/${detectResult.file_id}`;
 
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = downloadUrl;
-    a.download = 'skripsi_formatted.docx';
+    a.download = "skripsi_formatted.docx";
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -135,8 +149,14 @@ export default function SkripsiKitTool() {
         </div>
       )}
 
-      {step === 'upload' && (
+      {step === "upload" && (
         <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <h1 className="text-2xl font-bold text-center">
+            Penomoran Skripsi Otomatis
+          </h1>
+          <p className="text-center text-sm text-gray-500 mb-5">
+            Beri nomor skripsimu dalam hitungan detik
+          </p>
           <label
             htmlFor="file-upload"
             className="cursor-pointer flex flex-col items-center gap-4 py-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors"
@@ -146,9 +166,11 @@ export default function SkripsiKitTool() {
             </div>
             <div>
               <p className="font-medium text-slate-900">
-                {file ? file.name : 'Klik untuk pilih file skripsi'}
+                {file ? file.name : "Klik untuk pilih file skripsi"}
               </p>
-              <p className="text-sm text-slate-500 mt-1">Format .docx, maksimal 25MB</p>
+              <p className="text-sm text-slate-500 mt-1">
+                Format .docx, maksimal 25MB
+              </p>
             </div>
             <input
               id="file-upload"
@@ -179,14 +201,15 @@ export default function SkripsiKitTool() {
         </div>
       )}
 
-      {step === 'review' && detectResult && (
+      {step === "review" && detectResult && (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
           <div className="px-6 py-5 border-b border-slate-100">
             <h2 className="font-semibold text-slate-900">
               {sectionPoints.length} bagian terdeteksi
             </h2>
             <p className="text-sm text-slate-500 mt-1">
-              Periksa daftar di bawah. Hapus item yang salah terdeteksi sebelum lanjut.
+              Periksa daftar di bawah. Hapus item yang salah terdeteksi sebelum
+              lanjut.
             </p>
           </div>
 
@@ -197,11 +220,13 @@ export default function SkripsiKitTool() {
                 className="flex items-center justify-between gap-4 px-6 py-3.5 hover:bg-slate-50 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${confidenceStyle[point.confidence]}`}>
+                  <span
+                    className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${confidenceStyle[point.confidence]}`}
+                  >
                     {typeLabel[point.type]}
                   </span>
                   <span className="text-sm text-slate-700 truncate">
-                    {point.text.replace(/\n/g, ' ')}
+                    {point.text.replace(/\n/g, " ")}
                   </span>
                 </div>
                 <button
@@ -221,7 +246,10 @@ export default function SkripsiKitTool() {
           </ul>
 
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
-            <button onClick={resetAll} className="text-sm text-slate-500 hover:text-slate-700">
+            <button
+              onClick={resetAll}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
               Batal, mulai ulang
             </button>
             <button
@@ -245,23 +273,28 @@ export default function SkripsiKitTool() {
         </div>
       )}
 
-      {step === 'done' && (
+      {step === "done" && (
         <div className="space-y-4">
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-5 py-4 flex items-center gap-3">
             <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
             <p className="text-sm text-emerald-800">
-              Dokumen berhasil diformat. Berikut ringkasan penomoran yang diterapkan.
+              Dokumen berhasil diformat. Berikut ringkasan penomoran yang
+              diterapkan.
             </p>
           </div>
 
           <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-100">
-              <span className="text-sm font-medium text-slate-700">Ringkasan Format</span>
+              <span className="text-sm font-medium text-slate-700">
+                Ringkasan Format
+              </span>
             </div>
             <ul className="divide-y divide-slate-100">
               {summary.map((item, i) => (
                 <li key={i} className="px-6 py-4">
-                  <p className="text-sm font-medium text-slate-900">{item.label}</p>
+                  <p className="text-sm font-medium text-slate-900">
+                    {item.label}
+                  </p>
                   <p className="text-sm text-slate-500 mt-0.5">{item.format}</p>
                 </li>
               ))}
@@ -269,7 +302,10 @@ export default function SkripsiKitTool() {
           </div>
 
           <div className="flex items-center justify-between">
-            <button onClick={resetAll} className="text-sm text-slate-500 hover:text-slate-700">
+            <button
+              onClick={resetAll}
+              className="text-sm text-slate-500 hover:text-slate-700"
+            >
               Proses file lain
             </button>
             <button
