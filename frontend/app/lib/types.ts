@@ -1,8 +1,8 @@
 export type SectionPoint = {
   index: number;
   text: string;
-  type: 'BAB' | 'BACK_MATTER';
-  confidence: 'tinggi' | 'sedang' | 'RENDAH' | 'manual';
+  type: "BAB" | "BACK_MATTER";
+  confidence: "tinggi" | "sedang" | "RENDAH" | "manual";
 };
 
 export type DetectResponse = {
@@ -16,4 +16,10 @@ export type SummaryItem = {
   format: string;
 };
 
-export type Step = 'upload' | 'review' | 'done';
+export type Step = "upload" | "review" | "done";
+
+export type TransferFile = {
+  name: string;
+  bytes: Uint8Array;
+  pages: number;
+};

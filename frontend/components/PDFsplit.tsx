@@ -4,7 +4,8 @@ import { useState, useRef, useCallback } from "react";
 import { PDFDocument } from "pdf-lib";
 import JSZip from "jszip";
 import type * as PdfJsLib from "pdfjs-dist";
-import { Trash2, Upload } from "lucide-react";
+import { FileText, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
+import type { TransferFile } from "../app/lib/types";
 
 // ---------------------------------------------------------------------------
 // Polyfill Uint8Array.toHex/toBase64 (dibutuhkan pdfjs-dist 5.x)
@@ -278,10 +279,6 @@ function detectLang(pages: PageLines[]): Lang {
 const PUSTAKA_LOOSE_RE = /^DAFTAR\s+PUSTAKA(?:\s|$)/;
 const PUSTAKA_TITLE_RE =
   /^(?:DAFTAR\s+PUSTAKA|REFERENCES?|BIBLIOGRAPHY|LIST\s+OF\s+REFERENCES|REFERENCE\s+LIST|WORKS\s+CITED)\s*[:.]?$/;
-
-function isPustakaTitle(text: string): boolean {
-  return PUSTAKA_TITLE_RE.test(normalizeHeadingText(text));
-}
 
 function hasPustakaHeading(lines: PageLines): boolean {
   const top = lines.slice(0, 25).map(normalizeHeadingText);
@@ -684,14 +681,33 @@ function detectSections(pages: PageLines[]): Section[] {
 // ---------------------------------------------------------------------------
 // COMPONENT
 // ---------------------------------------------------------------------------
-export default function PDFsplit() {
+export default function PDFsplit({
+  onSendToMerge,
+}: {
+  onSendToMerge?: (files: TransferFile[]) => void;
+}) {
   const [numPages, setNumPages] = useState(0);
   const [sections, setSections] = useState<Section[]>([]);
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const bytesRef = useRef<Uint8Array | null>(null);
+  const [fileName, setFileName] = useState("");
+
+  const isInvalid = (s: Section) =>
+    s.from < 1 || s.to < s.from || s.to > numPages;
+
+  const validCount = sections.filter((s) => !isInvalid(s)).length;
+
+  const resetAll = () => {
+    bytesRef.current = null;
+    setSections([]);
+    setNumPages(0);
+    setFileName("");
+    setStatus("");
+  };
 
   const handleFile = useCallback(async (file: File) => {
+    setFileName(file.name);
     setBusy(true);
     setStatus("Membaca PDF...");
     setSections([]);
@@ -752,31 +768,40 @@ export default function PDFsplit() {
       { name: "Bagian Baru", from: 1, to: numPages },
     ]);
 
+  const buildSplitFiles = async (): Promise<TransferFile[]> => {
+    const src = await PDFDocument.load(bytesRef.current!);
+    const files: TransferFile[] = [];
+    let n = 1;
+    for (const s of sections) {
+      if (isInvalid(s)) continue;
+      const out = await PDFDocument.create();
+      const idx = Array.from(
+        { length: s.to - s.from + 1 },
+        (_, k) => s.from - 1 + k,
+      );
+      const copied = await out.copyPages(src, idx);
+      copied.forEach((p) => out.addPage(p));
+      const cleanName = s.name
+        .replace(/[<>:"/\\|?*]/g, "")
+        .trim()
+        .toUpperCase();
+      files.push({
+        name: `${n}. ${cleanName}.pdf`,
+        bytes: await out.save(),
+        pages: s.to - s.from + 1,
+      });
+      n++;
+    }
+    return files;
+  };
+
   const splitAndDownload = async () => {
     if (!bytesRef.current) return;
     setBusy(true);
     setStatus("Memproses split...");
     try {
       const zip = new JSZip();
-      const src = await PDFDocument.load(bytesRef.current);
-      let n = 1;
-      for (const s of sections) {
-        if (s.from < 1 || s.to < s.from || s.to > numPages) continue;
-        const out = await PDFDocument.create();
-        const idx = Array.from(
-          { length: s.to - s.from + 1 },
-          (_, k) => s.from - 1 + k,
-        );
-        const copied = await out.copyPages(src, idx);
-        copied.forEach((p) => out.addPage(p));
-        const bytes = await out.save();
-        const cleanName = s.name
-          .replace(/[<>:"/\\|?*]/g, "")
-          .trim()
-          .toUpperCase();
-        zip.file(`${n}. ${cleanName}.pdf`, bytes);
-        n++;
-      }
+      for (const f of await buildSplitFiles()) zip.file(f.name, f.bytes);
       const blob = await zip.generateAsync({ type: "blob" });
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
@@ -792,108 +817,193 @@ export default function PDFsplit() {
     }
   };
 
+  const sendToMerge = async () => {
+    if (!bytesRef.current || !onSendToMerge) return;
+    setBusy(true);
+    setStatus("Menyiapkan file untuk merge...");
+    try {
+      onSendToMerge(await buildSplitFiles());
+      setStatus("");
+    } catch (err: unknown) {
+      setStatus(
+        "Gagal menyiapkan: " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl mx-auto px-6 pb-10">
       <h1 className="text-2xl font-bold text-center">Split Skripsi per BAB</h1>
       <p className="text-center text-sm text-gray-500 mb-5">
         Pisahkan skripsi Anda berdasarkan bab dalam sekali klik
       </p>
-      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
-        <label className="cursor-pointer flex flex-col items-center gap-4 py-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors">
-          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
-            <Upload className="w-6 h-6 text-slate-500" />
-          </div>
-          <p>Klik atau pilih file PDF skripsi</p>
-          <input
-            type="file"
-            accept="application/pdf"
-            className="hidden"
-            onChange={(e) =>
-              e.target.files?.[0] && handleFile(e.target.files[0])
-            }
-          />
-        </label>
-        {status && <p className="text-sm text-gray-500 mt-2">{status}</p>}
-      </div>
 
-      {sections.length > 0 && (
-        <div className="border rounded-lg p-4 space-y-3 mt-5">
-          <p className="font-medium text-sm">
-            Struktur terdeteksi (edit bila perlu)
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left border-b">
-                  <th className="py-1">Nama</th>
-                  <th className="py-1">Dari</th>
-                  <th className="py-1">Sampai</th>
-                  <th className="py-1">Aksi</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sections.map((s, i) => (
-                  <tr key={i} className="border-b">
-                    <td className="py-1 pr-2">
-                      <input
-                        className="w-full border rounded px-1"
-                        value={s.name}
-                        onChange={(e) =>
-                          updateSection(i, { name: e.target.value })
-                        }
-                      />
-                    </td>
-                    <td className="py-1 pr-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={numPages}
-                        className="w-16 border rounded px-1"
-                        value={s.from}
-                        onChange={(e) =>
-                          updateSection(i, { from: +e.target.value })
-                        }
-                      />
-                    </td>
-                    <td className="py-1 pr-2">
-                      <input
-                        type="number"
-                        min={1}
-                        max={numPages}
-                        className="w-16 border rounded px-1"
-                        value={s.to}
-                        onChange={(e) =>
-                          updateSection(i, { to: +e.target.value })
-                        }
-                      />
-                    </td>
-                    <td>
-                      <button
-                        onClick={() => removeSection(i)}
-                        className="text-xs bg-red-500 text-white px-2 py-1 rounded-md my-2"
-                      >
-                        Hapus
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+      {/* Dropzone: tampil sebelum ada file */}
+      {numPages === 0 && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
+          <label className="cursor-pointer flex flex-col items-center gap-4 py-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors">
+            <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
+              <Upload className="w-6 h-6 text-slate-500" />
+            </div>
+            <p>Klik atau pilih file PDF skripsi</p>
+            <input
+              type="file"
+              accept="application/pdf"
+              className="hidden"
+              disabled={busy}
+              onChange={(e) => {
+                if (e.target.files?.[0]) handleFile(e.target.files[0]);
+                e.target.value = "";
+              }}
+            />
+          </label>
+          {status && <p className="text-sm text-gray-500 mt-2">{status}</p>}
+        </div>
+      )}
+
+      {/* Info file: tampil setelah file dibaca */}
+      {numPages > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div className="w-10 h-10 shrink-0 rounded-lg bg-red-50 flex items-center justify-center">
+            <FileText className="w-5 h-5 text-red-500" />
           </div>
+          <div className="flex-1 min-w-0">
+            <p className="truncate text-sm font-medium text-slate-800">
+              {fileName}
+            </p>
+            <p className="text-xs text-slate-500">{numPages} halaman</p>
+          </div>
+          <button
+            onClick={resetAll}
+            disabled={busy}
+            className="flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 hover:bg-slate-100 disabled:opacity-50"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            Ganti file
+          </button>
+        </div>
+      )}
+
+      {numPages > 0 && status && (
+        <p className="text-sm text-slate-500 text-center mt-3">{status}</p>
+      )}
+
+      {/* Daftar bagian */}
+      {numPages > 0 && (
+        <div className="border rounded-lg p-4 space-y-3 mt-5">
+          <div>
+            <p className="font-medium text-sm">
+              Struktur terdeteksi ({sections.length} bagian)
+            </p>
+            <p className="text-xs text-slate-500">
+              Ubah nama atau rentang halaman bila perlu. Kartu merah berarti
+              rentang tidak valid dan akan dilewati.
+            </p>
+          </div>
+
+          <ul className="space-y-2">
+            {sections.map((s, i) => {
+              const invalid = isInvalid(s);
+              return (
+                <li
+                  key={i}
+                  className={`flex flex-wrap items-center gap-3 rounded-lg border bg-white px-3 py-2.5 text-sm shadow-sm ${
+                    invalid
+                      ? "border-red-300 bg-red-50"
+                      : "border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  <span className="w-6 text-right font-medium text-slate-500">
+                    {i + 1}.
+                  </span>
+
+                  <input
+                    className="flex-1 min-w-35 rounded-md border border-slate-200 px-2 py-1.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                    value={s.name}
+                    onChange={(e) => updateSection(i, { name: e.target.value })}
+                    aria-label="Nama bagian"
+                  />
+
+                  <div className="flex items-center gap-2 text-xs text-slate-500">
+                    <span>Hal.</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={numPages}
+                      className="w-16 rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                      value={s.from}
+                      onChange={(e) =>
+                        updateSection(i, { from: +e.target.value })
+                      }
+                      aria-label="Dari halaman"
+                    />
+                    <span>–</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={numPages}
+                      className="w-16 rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                      value={s.to}
+                      onChange={(e) =>
+                        updateSection(i, { to: +e.target.value })
+                      }
+                      aria-label="Sampai halaman"
+                    />
+                  </div>
+
+                  <span
+                    className={`w-24 text-xs text-right ${
+                      invalid ? "text-red-500" : "text-slate-500"
+                    }`}
+                  >
+                    {invalid ? "Tidak valid" : `${s.to - s.from + 1} halaman`}
+                  </span>
+
+                  <button
+                    onClick={() => removeSection(i)}
+                    className="p-1.5 text-red-500 border border-red-200 rounded-md hover:bg-red-50"
+                    aria-label="Hapus"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+
+          {sections.length === 0 && (
+            <p className="text-sm text-slate-500 text-center py-4">
+              Belum ada bagian. Klik &quot;Tambah bagian&quot; untuk mulai.
+            </p>
+          )}
+
           <div className="flex gap-2">
             <button
               onClick={addSection}
-              className="text-xs border rounded px-2 py-1"
+              className="flex items-center gap-1 text-xs border rounded-md px-2.5 py-1.5 hover:bg-slate-100"
             >
-              + Tambah bagian
+              <Plus className="w-3.5 h-3.5" />
+              Tambah bagian
             </button>
             <button
               onClick={splitAndDownload}
-              disabled={busy}
-              className="ml-auto bg-gray-950 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50"
+              disabled={busy || validCount === 0}
+              className="bg-gray-950 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50"
             >
-              Split & Unduh ZIP
+              Split & Unduh ZIP ({validCount})
             </button>
+            {onSendToMerge && (
+              <button
+                onClick={sendToMerge}
+                disabled={busy || validCount === 0}
+                className="border text-sm rounded px-3 py-1.5 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Kirim ke Merge ({validCount})
+              </button>
+            )}
           </div>
         </div>
       )}

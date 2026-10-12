@@ -1,7 +1,7 @@
 import Footer from "@/components/Footer";
 import Header from "@/components/Headers";
 import Hero from "@/components/Hero";
-import PDFsplit from "@/components/PDFsplit";
+import PDFTools from "@/components/PDFtools";
 import SkripsiKitTool from "@/components/SkripsikitTools";
 
 export default function Home() {
@@ -10,7 +10,7 @@ export default function Home() {
       <Header />
       <Hero />
       <SkripsiKitTool />
-      <PDFsplit />
+      <PDFTools />
       <Footer />
     </div>
   );
