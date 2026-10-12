@@ -109,8 +109,30 @@ type PageLines = string[];
 // ---------------------------------------------------------------------------
 // REGEX
 // ---------------------------------------------------------------------------
-const BAB_RE = /^\s*BAB\s+([IVXLCDM]+|\d{1,2})(?:\s|$)/i;
+const BAB_RE =
+  /^\s*(BAB|CHAPTER)\s+([IVXLCDM]+|\d{1,2}|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN)(?=\s|$|[.:\-])/i;
 const DOTS_RE = /\.{4,}/;
+
+const ROMANS = ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"];
+const NUM_WORDS = [
+  "ONE",
+  "TWO",
+  "THREE",
+  "FOUR",
+  "FIVE",
+  "SIX",
+  "SEVEN",
+  "EIGHT",
+  "NINE",
+  "TEN",
+];
+
+function toRomanLabel(raw: string): string {
+  const u = raw.toUpperCase();
+  if (/^\d+$/.test(u)) return ROMANS[+u - 1] ?? u;
+  const w = NUM_WORDS.indexOf(u);
+  return w >= 0 ? ROMANS[w] : u;
+}
 
 // ---------------------------------------------------------------------------
 // TEXT NORMALIZATION
@@ -194,13 +216,22 @@ function looksLikeTocReference(line: string): boolean {
   return DOTS_RE.test(line) && /\d+\s*$/.test(line);
 }
 
+const TOC_TITLE_RE = /^(?:DAFTAR\s+ISI|TABLE\s+OF\s+CONTENTS?|CONTENTS)$/i;
+
 function isProbableTocPage(lines: PageLines): boolean {
   if (isTocPage(lines)) return true;
+
   let tocCount = 0;
+  let babCount = 0;
   for (const line of lines) {
     if (looksLikeTocReference(line)) tocCount++;
+    if (BAB_RE.test(line)) babCount++;
   }
-  return tocCount >= 3;
+  if (tocCount >= 3) return true;
+
+  // Judul "TABLE OF CONTENTS" + beberapa baris BAB/CHAPTER (walau tanpa titik-titik)
+  const hasTocTitle = lines.slice(0, 6).some((l) => TOC_TITLE_RE.test(l));
+  return hasTocTitle && babCount >= 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,24 +239,60 @@ function isProbableTocPage(lines: PageLines): boolean {
 // ---------------------------------------------------------------------------
 function detectBab(lines: PageLines): string | null {
   for (const line of lines.slice(0, 12)) {
+    if (line.length > 100) continue;
     const m = line.match(BAB_RE);
-    if (m) return `BAB ${m[1].toUpperCase()}`;
+    if (!m) continue;
+
+    // Hindari kalimat isi seperti "Chapter 2 explains the research method in detail."
+    const rest = line.slice(m[0].length).trim();
+    if (/\.$/.test(rest) && rest.split(/\s+/).length >= 6) continue;
+
+    return `BAB ${toRomanLabel(m[2])}`;
   }
   return null;
+}
+
+type Lang = "id" | "en";
+
+// Detect language based on BAB/CHAPTER usage in the first 12 lines of each page.
+
+function detectLang(pages: PageLines[]): Lang {
+  let id = 0;
+  let en = 0;
+  for (const lines of pages) {
+    if (isProbableTocPage(lines)) continue;
+    for (const line of lines.slice(0, 12)) {
+      const m = line.match(BAB_RE);
+      if (!m) continue;
+      if (m[1].toUpperCase() === "CHAPTER") en++;
+      else id++;
+      break;
+    }
+  }
+  return en > id ? "en" : "id";
 }
 
 // ---------------------------------------------------------------------------
 // DAFTAR PUSTAKA
 // ---------------------------------------------------------------------------
+const PUSTAKA_LOOSE_RE = /^DAFTAR\s+PUSTAKA(?:\s|$)/;
+const PUSTAKA_TITLE_RE =
+  /^(?:DAFTAR\s+PUSTAKA|REFERENCES?|BIBLIOGRAPHY|LIST\s+OF\s+REFERENCES|REFERENCE\s+LIST|WORKS\s+CITED)\s*[:.]?$/;
+
+function isPustakaTitle(text: string): boolean {
+  return PUSTAKA_TITLE_RE.test(normalizeHeadingText(text));
+}
+
 function hasPustakaHeading(lines: PageLines): boolean {
   const top = lines.slice(0, 25).map(normalizeHeadingText);
 
   for (const t of top) {
-    if (/^DAFTAR\s+PUSTAKA(?:\s|$)/.test(t)) return true;
+    if (PUSTAKA_LOOSE_RE.test(t) || PUSTAKA_TITLE_RE.test(t)) return true;
   }
 
+  // heading terpecah dua baris: "LIST OF" + "REFERENCES", "DAFTAR" + "PUSTAKA"
   for (let i = 0; i < top.length - 1; i++) {
-    if (/^DAFTAR\s+PUSTAKA$/.test(`${top[i]} ${top[i + 1]}`)) return true;
+    if (PUSTAKA_TITLE_RE.test(`${top[i]} ${top[i + 1]}`)) return true;
   }
   return false;
 }
@@ -314,25 +381,25 @@ function findPustakaPage(pages: PageLines[], startPage: number): number | null {
 
 // ---------------------------------------------------------------------------
 // LAMPIRAN
-// ---------------------------------------------------------------------------
+
+// LAMPIRAN, LAMPIRAN 1, LAMPIRAN A, LAMPIRAN-LAMPIRAN, APPENDIX, APPENDIX A,
+// APPENDICES, "APPENDIX A: Questionnaire"
+const LAMPIRAN_HEAD_RE =
+  /^(?:LAMPIRAN|APPENDIX|APPENDICES)(?:-LAMPIRAN)?(?:\s+(?:\d{1,3}|[A-Z]|[IVXLCDM]+))?(?:\s*[:.\-]\s*.{0,60})?$/;
+
 function hasLampiranHeading(lines: PageLines): boolean {
   const top = lines.slice(0, 25).map(normalizeHeadingText);
 
   for (const line of top) {
-    if (line === "LAMPIRAN") return true;
-
     const cleaned = line.replace(/\s*-\s*/g, "-");
-    if (cleaned === "LAMPIRAN-LAMPIRAN") return true;
-
-    if (/^LAMPIRAN\s+\d{1,3}$/.test(line)) return true;
-    if (/^LAMPIRAN\s+[A-Z]$/.test(line)) return true;
-    if (/^LAMPIRAN\s+[IVXLCDM]+$/.test(line)) return true;
+    if (LAMPIRAN_HEAD_RE.test(line) || LAMPIRAN_HEAD_RE.test(cleaned)) {
+      return true;
+    }
   }
 
-  // heading terpecah dua baris: "LAMPIRAN" + "1"
+  // heading terpecah dua baris: "APPENDIX" + "A"
   for (let i = 0; i < top.length - 1; i++) {
-    const combined = normalizeHeadingText(`${top[i]} ${top[i + 1]}`);
-    if (/^LAMPIRAN\s+(?:\d{1,3}|[A-Z]|[IVXLCDM]+)$/.test(combined)) return true;
+    if (LAMPIRAN_HEAD_RE.test(`${top[i]} ${top[i + 1]}`)) return true;
   }
 
   return false;
@@ -345,9 +412,7 @@ function scoreLampiranPage(lines: PageLines): number {
 
   const top = lines.slice(0, 25);
   for (let i = 0; i < top.length; i++) {
-    if (
-      /^LAMPIRAN(?:\s+[A-Z]|\s+\d{1,3})?$/.test(normalizeHeadingText(top[i]))
-    ) {
+    if (LAMPIRAN_HEAD_RE.test(normalizeHeadingText(top[i]))) {
       if (i <= 5) score += 4;
       else if (i <= 10) score += 2;
       break;
@@ -366,6 +431,13 @@ function scoreLampiranPage(lines: PageLines): number {
     "BUKTI",
     "PEDOMAN",
     "WAWANCARA",
+    "QUESTIONNAIRE",
+    "INSTRUMENT",
+    "DOCUMENTATION",
+    "LETTER",
+    "INTERVIEW",
+    "TRANSCRIPT",
+    "APPROVAL",
   ];
   const hits = keywords.filter((k) => joined.includes(k)).length;
   score += Math.min(hits, 4);
@@ -390,6 +462,16 @@ const APPENDIX_TRANSITION_KEYWORDS = [
   "HASIL WAWANCARA",
   "HASIL KUESIONER",
   "OUTPUT SPSS",
+  "QUESTIONNAIRE",
+  "RESEARCH INSTRUMENT",
+  "INTERVIEW GUIDE",
+  "INTERVIEW TRANSCRIPT",
+  "PERMISSION LETTER",
+  "RESEARCH PERMIT",
+  "RESPONDENT DATA",
+  "RESEARCH DATA",
+  "INTERVIEW RESULTS",
+  "SPSS OUTPUT",
 ];
 
 function scoreAppendixTransition(
@@ -493,11 +575,28 @@ function classify(lines: PageLines): string | null {
   return detectBab(lines);
 }
 
+const EN_NAMES: Record<string, string> = {
+  "Halaman Awal": "Front Matter",
+  "Daftar Pustaka": "References",
+  Lampiran: "Appendices",
+};
+
+function localizeSections(sections: Section[], lang: Lang): Section[] {
+  if (lang === "id") return sections;
+  return sections.map((s) => ({
+    ...s,
+    name: s.name.startsWith("BAB ")
+      ? s.name.replace("BAB", "CHAPTER")
+      : (EN_NAMES[s.name] ?? s.name),
+  }));
+}
+
 const VALID_BAB = ["BAB I", "BAB II", "BAB III", "BAB IV", "BAB V"];
 
 function detectSections(pages: PageLines[]): Section[] {
   const total = pages.length;
   if (total === 0) return [];
+  const lang = detectLang(pages);
 
   // 1. Deteksi BAB
   const babFound: { page: number; label: string }[] = [];
@@ -521,7 +620,10 @@ function detectSections(pages: PageLines[]): Section[] {
       sections.push({ name: "Halaman Awal", from: 1, to: firstBabPage - 1 });
     }
   } else if (babFound.length === 0) {
-    return [{ name: "Halaman Awal", from: 1, to: total }];
+    return localizeSections(
+      [{ name: "Halaman Awal", from: 1, to: total }],
+      lang,
+    );
   }
 
   // 3. BAB I–V
@@ -573,7 +675,10 @@ function detectSections(pages: PageLines[]): Section[] {
 
   // 8. Sort + validasi
   sections.sort((a, b) => a.from - b.from);
-  return sections.filter((s) => s.from >= 1 && s.from <= s.to && s.to <= total);
+  return localizeSections(
+    sections.filter((s) => s.from >= 1 && s.from <= s.to && s.to <= total),
+    lang,
+  );
 }
 
 // ---------------------------------------------------------------------------
