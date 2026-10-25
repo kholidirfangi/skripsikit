@@ -17,24 +17,25 @@ export default function PDFTools() {
   return (
     <div>
       <div className="flex justify-center gap-2 my-6">
-        <button className={tabClass(tab === "split")} onClick={() => setTab("split")}>
+        <button
+          className={tabClass(tab === "split")}
+          onClick={() => setTab("split")}
+        >
           Split
         </button>
-        <button className={tabClass(tab === "merge")} onClick={() => setTab("merge")}>
+        <button
+          className={tabClass(tab === "merge")}
+          onClick={() => setTab("merge")}
+        >
           Merge
         </button>
       </div>
 
       <div className={tab === "split" ? "" : "hidden"}>
-        <PDFsplit
-          onSendToMerge={(files) => {
-            setIncoming(files);
-            setTab("merge");
-          }}
-        />
+        <PDFsplit />
       </div>
       <div className={tab === "merge" ? "" : "hidden"}>
-        <PDFMerge incoming={incoming} onConsumed={() => setIncoming(null)} />
+        <PDFMerge />
       </div>
     </div>
   );

@@ -681,11 +681,7 @@ function detectSections(pages: PageLines[]): Section[] {
 // ---------------------------------------------------------------------------
 // COMPONENT
 // ---------------------------------------------------------------------------
-export default function PDFsplit({
-  onSendToMerge,
-}: {
-  onSendToMerge?: (files: TransferFile[]) => void;
-}) {
+export default function PDFsplit() {
   const [numPages, setNumPages] = useState(0);
   const [sections, setSections] = useState<Section[]>([]);
   const [status, setStatus] = useState("");
@@ -817,38 +813,25 @@ export default function PDFsplit({
     }
   };
 
-  const sendToMerge = async () => {
-    if (!bytesRef.current || !onSendToMerge) return;
-    setBusy(true);
-    setStatus("Menyiapkan file untuk merge...");
-    try {
-      onSendToMerge(await buildSplitFiles());
-      setStatus("");
-    } catch (err: unknown) {
-      setStatus(
-        "Gagal menyiapkan: " +
-          (err instanceof Error ? err.message : String(err)),
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
-    <div className="max-w-4xl mx-auto px-6 pb-10">
-      <h1 className="text-2xl font-bold text-center">Split Skripsi per BAB</h1>
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 pb-10">
+      <h1 className="text-xl sm:text-2xl font-bold text-center">
+        Split Skripsi per BAB
+      </h1>
       <p className="text-center text-sm text-gray-500 mb-5">
         Pisahkan skripsi Anda berdasarkan bab dalam sekali klik
       </p>
 
       {/* Dropzone: tampil sebelum ada file */}
       {numPages === 0 && (
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
-          <label className="cursor-pointer flex flex-col items-center gap-4 py-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors">
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-10 text-center">
+          <label className="cursor-pointer flex flex-col items-center gap-4 py-8 sm:py-10 px-3 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 active:bg-slate-50 transition-colors">
             <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
               <Upload className="w-6 h-6 text-slate-500" />
             </div>
-            <p>Klik atau pilih file PDF skripsi</p>
+            <p className="text-sm sm:text-base">
+              Klik atau pilih file PDF skripsi
+            </p>
             <input
               type="file"
               accept="application/pdf"
@@ -860,13 +843,13 @@ export default function PDFsplit({
               }}
             />
           </label>
-          {status && <p className="text-sm text-gray-500 mt-2">{status}</p>}
+          {status && <p className="text-sm text-gray-500 mt-3">{status}</p>}
         </div>
       )}
 
       {/* Info file: tampil setelah file dibaca */}
       {numPages > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 sm:px-4 py-3 shadow-sm">
           <div className="w-10 h-10 shrink-0 rounded-lg bg-red-50 flex items-center justify-center">
             <FileText className="w-5 h-5 text-red-500" />
           </div>
@@ -879,10 +862,10 @@ export default function PDFsplit({
           <button
             onClick={resetAll}
             disabled={busy}
-            className="flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-1.5 hover:bg-slate-100 disabled:opacity-50"
+            className="shrink-0 flex items-center gap-1.5 text-xs border rounded-md px-2.5 py-2 hover:bg-slate-100 disabled:opacity-50"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            Ganti file
+            <span className="hidden xs:inline sm:inline">Ganti file</span>
           </button>
         </div>
       )}
@@ -893,7 +876,7 @@ export default function PDFsplit({
 
       {/* Daftar bagian */}
       {numPages > 0 && (
-        <div className="border rounded-lg p-4 space-y-3 mt-5">
+        <div className="rounded-lg p-3 sm:p-4 space-y-3 mt-5">
           <div>
             <p className="font-medium text-sm">
               Struktur terdeteksi ({sections.length} bagian)
@@ -910,65 +893,74 @@ export default function PDFsplit({
               return (
                 <li
                   key={i}
-                  className={`flex flex-wrap items-center gap-3 rounded-lg border bg-white px-3 py-2.5 text-sm shadow-sm ${
+                  className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 rounded-lg px-3 py-3 sm:py-2.5 text-sm shadow-sm ${
                     invalid
                       ? "border-red-300 bg-red-50"
-                      : "border-slate-200 hover:border-slate-300"
+                      : "border-slate-200 bg-white hover:border-slate-300"
                   }`}
                 >
-                  <span className="w-6 text-right font-medium text-slate-500">
-                    {i + 1}.
-                  </span>
-
-                  <input
-                    className="flex-1 min-w-35 rounded-md border border-slate-200 px-2 py-1.5 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                    value={s.name}
-                    onChange={(e) => updateSection(i, { name: e.target.value })}
-                    aria-label="Nama bagian"
-                  />
-
-                  <div className="flex items-center gap-2 text-xs text-slate-500">
-                    <span>Hal.</span>
+                  {/* Baris 1 (HP): nomor + nama */}
+                  <div className="flex items-center gap-2 sm:flex-1 sm:min-w-0">
+                    <span className="w-6 shrink-0 text-right font-medium text-slate-500">
+                      {i + 1}.
+                    </span>
                     <input
-                      type="number"
-                      min={1}
-                      max={numPages}
-                      className="w-16 rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                      value={s.from}
+                      className="flex-1 min-w-0 rounded-md border border-slate-200 bg-white px-2 py-2 sm:py-1.5 text-base sm:text-sm font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                      value={s.name}
                       onChange={(e) =>
-                        updateSection(i, { from: +e.target.value })
+                        updateSection(i, { name: e.target.value })
                       }
-                      aria-label="Dari halaman"
-                    />
-                    <span>–</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={numPages}
-                      className="w-16 rounded-md border border-slate-200 px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
-                      value={s.to}
-                      onChange={(e) =>
-                        updateSection(i, { to: +e.target.value })
-                      }
-                      aria-label="Sampai halaman"
+                      aria-label="Nama bagian"
                     />
                   </div>
 
-                  <span
-                    className={`w-24 text-xs text-right ${
-                      invalid ? "text-red-500" : "text-slate-500"
-                    }`}
-                  >
-                    {invalid ? "Tidak valid" : `${s.to - s.from + 1} halaman`}
-                  </span>
+                  {/* Baris 2 (HP): halaman + info + hapus */}
+                  <div className="flex items-center gap-2 pl-8 sm:pl-0">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <span>Hal.</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={numPages}
+                        className="w-16 rounded-md border border-slate-200 bg-white px-2 py-2 sm:py-1.5 text-base sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                        value={s.from}
+                        onChange={(e) =>
+                          updateSection(i, { from: +e.target.value })
+                        }
+                        aria-label="Dari halaman"
+                      />
+                      <span>–</span>
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        min={1}
+                        max={numPages}
+                        className="w-16 rounded-md border border-slate-200 bg-white px-2 py-2 sm:py-1.5 text-base sm:text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                        value={s.to}
+                        onChange={(e) =>
+                          updateSection(i, { to: +e.target.value })
+                        }
+                        aria-label="Sampai halaman"
+                      />
+                    </div>
 
-                  <button
-                    onClick={() => removeSection(i)}
-                    className="p-1.5 text-red-500 border border-red-200 rounded-md hover:bg-red-50"
-                    aria-label="Hapus"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                    <span
+                      className={`flex-1 sm:flex-none sm:w-24 text-xs text-right ${
+                        invalid ? "text-red-500" : "text-slate-500"
+                      }`}
+                    >
+                      {invalid ? "Tidak valid" : `${s.to - s.from + 1} hal.`}
+                    </span>
+
+                    <button
+                      onClick={() => removeSection(i)}
+                      className="shrink-0 p-2 sm:p-1.5 text-red-500 border border-red-200 rounded-md hover:bg-red-50 active:bg-red-50"
+                      aria-label="Hapus"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </li>
               );
             })}
@@ -980,10 +972,10 @@ export default function PDFsplit({
             </p>
           )}
 
-          <div className="flex gap-2">
+          <div className="flex justify-between gap-2 sm:flex-row">
             <button
               onClick={addSection}
-              className="flex items-center gap-1 text-xs border rounded-md px-2.5 py-1.5 hover:bg-slate-100"
+              className="flex items-center justify-center gap-1 text-sm sm:text-xs border rounded-md px-3 py-2.5 sm:py-1.5 hover:bg-slate-100"
             >
               <Plus className="w-3.5 h-3.5" />
               Tambah bagian
@@ -991,19 +983,10 @@ export default function PDFsplit({
             <button
               onClick={splitAndDownload}
               disabled={busy || validCount === 0}
-              className="bg-gray-950 text-white text-sm rounded px-3 py-1.5 disabled:opacity-50"
+              className="bg-gray-950 text-white text-sm rounded-md px-3 py-2.5 sm:py-1.5 disabled:opacity-50"
             >
               Split & Unduh ZIP ({validCount})
             </button>
-            {onSendToMerge && (
-              <button
-                onClick={sendToMerge}
-                disabled={busy || validCount === 0}
-                className="border text-sm rounded px-3 py-1.5 hover:bg-slate-100 disabled:opacity-50"
-              >
-                Kirim ke Merge ({validCount})
-              </button>
-            )}
           </div>
         </div>
       )}
