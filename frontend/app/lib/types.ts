@@ -7,7 +7,6 @@ export type SectionPoint = {
 
 export type DetectResponse = {
   file_id: string;
-  safe_path: string;
   section_points: SectionPoint[];
 };
 

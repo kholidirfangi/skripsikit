@@ -102,7 +102,6 @@ export default function SkripsiKitTool() {
     try {
       const formData = new FormData();
       formData.append("file_id", detectResult.file_id);
-      formData.append("safe_path", detectResult.safe_path);
       formData.append("section_points", JSON.stringify(sectionPoints));
 
       const res = await fetch(`${API_URL}/api/process`, {

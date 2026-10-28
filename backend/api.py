@@ -39,23 +39,32 @@ async def detect(file: UploadFile = File(...)):
         content = await file.read()
         f.write(content)
 
-    safe_path = sanitize_docx(saved_path)
-    doc = Document(safe_path)
+    # Jika perlu sanitasi file, timpa atau simpan ke path terstandarisasi file_id
+    sanitized_path = sanitize_docx(saved_path)
+    if sanitized_path != saved_path:
+        if os.path.exists(saved_path):
+            os.remove(saved_path)
+        os.replace(sanitized_path, saved_path)
+
+    doc = Document(saved_path)
 
     section_points = find_section_points(doc)
 
     return JSONResponse({
         "file_id": file_id,
-        "safe_path": safe_path,
         "section_points": section_points,
     })
 
 @app.post("/api/process")
-async def process(file_id: str = Form(...), safe_path: str = Form(...), section_points: str = Form(...)):
+async def process(file_id: str = Form(...), section_points: str = Form(...)):
     import json
+    input_path = os.path.join(TEMP_DIR, f"{file_id}.docx")
+    if not os.path.exists(input_path):
+        return JSONResponse({"error": "File tidak ditemukan atau sudah kedaluwarsa"}, status_code=404)
+
     final_points = json.loads(section_points)
 
-    doc = Document(safe_path)
+    doc = Document(input_path)
 
     create_section_breaks(doc, final_points)
     summary = configure_page_numbers(doc, final_points)
