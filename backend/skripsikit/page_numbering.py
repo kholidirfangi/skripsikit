@@ -7,6 +7,91 @@ from .constants import SECTPR_CHILD_ORDER_TAGS
 
 SECTPR_CHILD_ORDER = [qn(f'w:{tag}') for tag in SECTPR_CHILD_ORDER_TAGS]
 
+PAGE_FIELD_PREFIXES = ('PAGE', 'NUMPAGES', 'SECTIONPAGES')
+
+
+def _is_page_field(instr):
+    return instr.strip().upper().startswith(PAGE_FIELD_PREFIXES)
+
+
+def _remove_page_fields_in_element(element):
+    """Hapus semua field nomor halaman (kompleks & fldSimple) di header/footer. Return jumlah yang dihapus."""
+    removed = 0
+
+    # 1) Field sederhana: <w:fldSimple w:instr="PAGE">
+    for fld in element.xpath('.//w:fldSimple'):
+        if _is_page_field(fld.get(qn('w:instr')) or ''):
+            fld.getparent().remove(fld)
+            removed += 1
+
+    # 2) Field kompleks: begin -> instrText -> (separate -> hasil) -> end,
+    #    bisa tersebar di beberapa run, atau semuanya dalam satu run.
+    for p in element.xpath('.//w:p'):
+        stack = []          # field yang sedang terbuka
+        to_remove = set()
+
+        for run in p.xpath('.//w:r'):
+            for f in stack:
+                f['runs'].add(run)
+
+            for child in run.iterchildren():
+                if child.tag == qn('w:fldChar'):
+                    t = child.get(qn('w:fldCharType'))
+                    if t == 'begin':
+                        new_f = {'runs': {run}, 'instr': ''}
+                        stack.append(new_f)
+                    elif t == 'end' and stack:
+                        f = stack.pop()
+                        f['runs'].add(run)
+                        if _is_page_field(f['instr']):
+                            to_remove |= f['runs']
+                            removed += 1
+                elif child.tag == qn('w:instrText') and stack:
+                    stack[-1]['instr'] += child.text or ''
+
+        for run in to_remove:
+            parent = run.getparent()
+            if parent is not None:
+                parent.remove(run)
+
+    return removed
+
+
+def strip_existing_page_numbers(doc):
+    """
+    Bersihkan penomoran lama sebelum penomoran baru diterapkan:
+    - field PAGE/NUMPAGES/SECTIONPAGES di semua header & footer
+      (default, halaman pertama, halaman genap)
+    - format/restart nomor (w:pgNumType) di semua section
+    - titlePg (beda halaman pertama) dan pengaturan header/footer ganjil-genap,
+      supaya tidak ada sisa pengaturan lama yang bentrok
+    Paragraf tidak dihapus, jadi indeks paragraf (section_points) tetap valid.
+    Return jumlah field nomor halaman yang dihapus.
+    """
+    removed = 0
+
+    for section in doc.sections:
+        for name in ('header', 'footer',
+                     'first_page_header', 'first_page_footer',
+                     'even_page_header', 'even_page_footer'):
+            part = getattr(section, name)
+            # Yang masih "linked" tidak punya definisi sendiri -> sudah
+            # tercakup di section sumbernya. Jangan diakses isinya agar
+            # python-docx tidak membuat definisi baru.
+            if part.is_linked_to_previous:
+                continue
+            removed += _remove_page_fields_in_element(part._element)
+
+        section.different_first_page_header_footer = False
+
+    for sectPr in doc.element.body.xpath('.//w:sectPr'):
+        for old in sectPr.findall(qn('w:pgNumType')):
+            sectPr.remove(old)
+
+    doc.settings.odd_and_even_pages_header_footer = False
+
+    return removed
+
 
 def insert_in_schema_order(sectPr, new_element):
     new_tag_order = SECTPR_CHILD_ORDER.index(new_element.tag)
@@ -111,6 +196,10 @@ def configure_page_numbers(doc, section_points):
     lalu terapkan format. Return ringkasan (list of dict) untuk
     ditampilkan ke user di web -- pengganti print ke terminal CLI.
     """
+
+    # Hapus penomoran bawaan file dulu agar tidak dobel
+    strip_existing_page_numbers(doc)
+    
     sections = doc.sections
     point_by_index = {p['index']: p for p in section_points}
 
