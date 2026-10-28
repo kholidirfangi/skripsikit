@@ -5,9 +5,16 @@ export type SectionPoint = {
   confidence: "tinggi" | "sedang" | "RENDAH" | "manual";
 };
 
+export type DocumentParagraph = {
+  index: number;
+  text: string;
+  style: string;
+};
+
 export type DetectResponse = {
   file_id: string;
   section_points: SectionPoint[];
+  available_paragraphs?: DocumentParagraph[];
 };
 
 export type SummaryItem = {

@@ -9,12 +9,15 @@ import {
   Loader2,
   Trash2,
   Download,
+  Plus,
+  Search,
 } from "lucide-react";
 import {
   SectionPoint,
   DetectResponse,
   SummaryItem,
   Step,
+  DocumentParagraph,
 } from "@/app/lib/types";
 import StepIndicator from "./StepIndicator";
 
@@ -41,6 +44,10 @@ export default function SkripsiKitTool() {
   const [sectionPoints, setSectionPoints] = useState<SectionPoint[]>([]);
   const [summary, setSummary] = useState<SummaryItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedParaIndex, setSelectedParaIndex] = useState<number | null>(null);
+  const [selectedType, setSelectedType] = useState<"BAB" | "BACK_MATTER">("BAB");
 
   function resetAll() {
     setStep("upload");
@@ -49,6 +56,35 @@ export default function SkripsiKitTool() {
     setSectionPoints([]);
     setSummary([]);
     setError(null);
+    setShowAddModal(false);
+    setSearchQuery("");
+    setSelectedParaIndex(null);
+    setSelectedType("BAB");
+  }
+
+  function handleAddPoint() {
+    if (selectedParaIndex === null || !detectResult?.available_paragraphs) return;
+    const targetPara = detectResult.available_paragraphs.find(
+      (p) => p.index === selectedParaIndex
+    );
+    if (!targetPara) return;
+
+    const newPoint: SectionPoint = {
+      index: targetPara.index,
+      text: targetPara.text,
+      type: selectedType,
+      confidence: "manual",
+    };
+
+    setSectionPoints((prev) => {
+      const updated = [...prev, newPoint];
+      updated.sort((a, b) => a.index - b.index);
+      return updated;
+    });
+
+    setShowAddModal(false);
+    setSelectedParaIndex(null);
+    setSearchQuery("");
   }
 
   async function handleDetect() {
@@ -202,14 +238,27 @@ export default function SkripsiKitTool() {
 
       {step === "review" && detectResult && (
         <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="px-6 py-5 border-b border-slate-100">
-            <h2 className="font-semibold text-slate-900">
-              {sectionPoints.length} bagian terdeteksi
-            </h2>
-            <p className="text-sm text-slate-500 mt-1">
-              Periksa daftar di bawah. Hapus item yang salah terdeteksi sebelum
-              lanjut.
-            </p>
+          <div className="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-slate-900">
+                {sectionPoints.length} bagian terdeteksi
+              </h2>
+              <p className="text-sm text-slate-500 mt-1">
+                Periksa daftar di bawah. Hapus item yang salah atau tambahkan BAB secara manual jika terlewat.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddModal(true);
+                setSelectedParaIndex(null);
+                setSearchQuery("");
+              }}
+              className="inline-flex items-center gap-1.5 self-start sm:self-auto px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors"
+            >
+              <Plus className="w-4 h-4 text-slate-600" />
+              Tambah BAB Manual
+            </button>
           </div>
 
           <ul className="divide-y divide-slate-100">
@@ -268,6 +317,143 @@ export default function SkripsiKitTool() {
                 </>
               )}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tambah Titik BAB Manual */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-start justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">
+                  Tambah Titik BAB Manual
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pilih judul BAB atau paragraf pemisah dari dokumen yang terlewat oleh deteksi.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Tipe Section */}
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Tipe Bagian
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedType("BAB")}
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${
+                    selectedType === "BAB"
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-semibold block">BAB</span>
+                  <span className="text-[11px] opacity-75">Halaman 1 bawah, lanjut kanan atas</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedType("BACK_MATTER")}
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${
+                    selectedType === "BACK_MATTER"
+                      ? "border-blue-500 bg-blue-50 text-blue-700"
+                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                  }`}
+                >
+                  <span className="font-semibold block">Lampiran / Pustaka</span>
+                  <span className="text-[11px] opacity-75">Format bagian akhir skripsi</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Pencarian Paragraf */}
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1.5">
+                Cari & Pilih Judul / Paragraf Dokumen
+              </label>
+              <div className="relative mb-2">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  placeholder="Ketik kata kunci, misal: 'BAB II' atau 'TINJAUAN'..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Daftar kandidat paragraf */}
+              <div className="max-h-60 overflow-y-auto border border-slate-200 rounded-lg divide-y divide-slate-100">
+                {(() => {
+                  const existingIndices = new Set(sectionPoints.map((p) => p.index));
+                  const candidates = (detectResult?.available_paragraphs ?? []).filter(
+                    (p) =>
+                      !existingIndices.has(p.index) &&
+                      (!searchQuery.trim() ||
+                        p.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                        p.style.toLowerCase().includes(searchQuery.toLowerCase()))
+                  );
+
+                  if (candidates.length === 0) {
+                    return (
+                      <div className="p-4 text-center text-xs text-slate-400">
+                        {searchQuery ? "Tidak ada paragraf yang cocok." : "Semua paragraf sudah ada di daftar."}
+                      </div>
+                    );
+                  }
+
+                  return candidates.map((p) => {
+                    const isSelected = selectedParaIndex === p.index;
+                    return (
+                      <div
+                        key={p.index}
+                        onClick={() => setSelectedParaIndex(p.index)}
+                        className={`p-2.5 text-xs cursor-pointer transition-colors ${
+                          isSelected
+                            ? "bg-blue-50 text-blue-900 border-l-4 border-blue-600"
+                            : "hover:bg-slate-50 text-slate-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium truncate">{p.text}</span>
+                          <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded shrink-0">
+                            {p.style}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+
+            {/* Aksi Modal */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setShowAddModal(false)}
+                className="px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-800"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                disabled={selectedParaIndex === null}
+                onClick={handleAddPoint}
+                className="px-4 py-2 text-xs font-medium bg-blue-600 hover:bg-blue-700 text-white rounded-lg disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Tambahkan ke Daftar
+              </button>
+            </div>
           </div>
         </div>
       )}

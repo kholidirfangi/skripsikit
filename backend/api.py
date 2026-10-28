@@ -50,9 +50,17 @@ async def detect(file: UploadFile = File(...)):
 
     section_points = find_section_points(doc)
 
+    # Ambil paragraf non-kosong agar mahasiswa bisa memilih/menambahkan titik BAB secara manual
+    available_paragraphs = [
+        {"index": i, "text": p.text.strip(), "style": p.style.name}
+        for i, p in enumerate(doc.paragraphs)
+        if p.text.strip()
+    ]
+
     return JSONResponse({
         "file_id": file_id,
         "section_points": section_points,
+        "available_paragraphs": available_paragraphs,
     })
 
 @app.post("/api/process")
