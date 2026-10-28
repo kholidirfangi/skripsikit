@@ -257,7 +257,7 @@ export default function SkripsiKitTool() {
               className="inline-flex items-center gap-1.5 self-start sm:self-auto px-3.5 py-2 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4 text-slate-600" />
-              Tambah BAB Manual
+              Tambah BAB
             </button>
           </div>
 
@@ -351,11 +351,10 @@ export default function SkripsiKitTool() {
                 <button
                   type="button"
                   onClick={() => setSelectedType("BAB")}
-                  className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${
-                    selectedType === "BAB"
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${selectedType === "BAB"
                       ? "border-blue-500 bg-blue-50 text-blue-700"
                       : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   <span className="font-semibold block">BAB</span>
                   <span className="text-[11px] opacity-75">Halaman 1 bawah, lanjut kanan atas</span>
@@ -363,11 +362,10 @@ export default function SkripsiKitTool() {
                 <button
                   type="button"
                   onClick={() => setSelectedType("BACK_MATTER")}
-                  className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${
-                    selectedType === "BACK_MATTER"
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${selectedType === "BACK_MATTER"
                       ? "border-blue-500 bg-blue-50 text-blue-700"
                       : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                  }`}
+                    }`}
                 >
                   <span className="font-semibold block">Lampiran / Pustaka</span>
                   <span className="text-[11px] opacity-75">Format bagian akhir skripsi</span>
@@ -417,11 +415,10 @@ export default function SkripsiKitTool() {
                       <div
                         key={p.index}
                         onClick={() => setSelectedParaIndex(p.index)}
-                        className={`p-2.5 text-xs cursor-pointer transition-colors ${
-                          isSelected
+                        className={`p-2.5 text-xs cursor-pointer transition-colors ${isSelected
                             ? "bg-blue-50 text-blue-900 border-l-4 border-blue-600"
                             : "hover:bg-slate-50 text-slate-700"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium truncate">{p.text}</span>
