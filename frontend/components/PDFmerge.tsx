@@ -39,6 +39,7 @@ export default function PDFMerge({
 
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [overIdx, setOverIdx] = useState<number | null>(null);
+  const [fileOver, setFileOver] = useState(false);
 
   // Simpan callback di ref supaya effect tidak jalan ulang
   // hanya karena parent membuat fungsi baru di tiap render.
@@ -173,13 +174,51 @@ export default function PDFMerge({
       <p className="text-center text-sm text-gray-500 mb-5">
         Gabungkan beberapa file PDF (cover, bab, lampiran) menjadi satu
       </p>
-
-      <div className="bg-white border border-slate-200 rounded-2xl p-10 text-center">
-        <label className="cursor-pointer flex flex-col items-center gap-4 py-10 border-2 border-dashed border-slate-200 rounded-xl hover:border-slate-300 hover:bg-slate-50 transition-colors">
-          <div className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center">
-            <Upload className="w-6 h-6 text-slate-500" />
+      <div
+        className={`bg-white border border-slate-200 rounded-2xl text-center ${
+          items.length ? "p-4" : "p-10"
+        }`}
+      >
+        <label
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes("Files")) return; // abaikan drag reorder
+            e.preventDefault();
+            setFileOver(true);
+          }}
+          onDragLeave={() => setFileOver(false)}
+          onDrop={(e) => {
+            if (!e.dataTransfer.types.includes("Files")) return;
+            e.preventDefault();
+            setFileOver(false);
+            if (!busy && e.dataTransfer.files.length)
+              addFiles(e.dataTransfer.files);
+          }}
+          className={`cursor-pointer flex items-center justify-center border-2 border-dashed rounded-xl transition-colors ${
+            items.length ? "flex-row gap-3 py-4" : "flex-col gap-4 py-10"
+          } ${
+            fileOver
+              ? "border-blue-500 bg-blue-50"
+              : "border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+          } ${busy ? "opacity-50 pointer-events-none" : ""}`}
+        >
+          <div
+            className={`rounded-full bg-slate-100 flex items-center justify-center ${
+              items.length ? "w-9 h-9" : "w-14 h-14"
+            }`}
+          >
+            <Upload
+              className={
+                items.length
+                  ? "w-4 h-4 text-slate-500"
+                  : "w-6 h-6 text-slate-500"
+              }
+            />
           </div>
-          <p>Klik atau pilih beberapa file PDF</p>
+          <p className={items.length ? "text-sm" : ""}>
+            {items.length
+              ? "Tambah file PDF lagi (klik atau seret ke sini)"
+              : "Klik atau seret beberapa file PDF ke sini"}
+          </p>
           <input
             type="file"
             accept="application/pdf"
@@ -188,7 +227,7 @@ export default function PDFMerge({
             disabled={busy}
             onChange={(e) => {
               if (e.target.files?.length) addFiles(e.target.files);
-              e.target.value = ""; // supaya file yang sama bisa dipilih lagi
+              e.target.value = "";
             }}
           />
         </label>
