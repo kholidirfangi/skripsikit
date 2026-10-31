@@ -97,6 +97,48 @@ function ensurePolyfills() {
     };
   }
 
+  // --- ReadableStream async iterator (for await ... of stream) --------------
+  // Dibutuhkan pdf.js; baru didukung native di Chrome 124.
+  if (
+    typeof ReadableStream !== "undefined" &&
+    !(ReadableStream.prototype as any)[Symbol.asyncIterator]
+  ) {
+    (ReadableStream.prototype as any).values = function (
+      this: ReadableStream,
+      { preventCancel = false }: { preventCancel?: boolean } = {},
+    ) {
+      const reader = this.getReader();
+      return {
+        async next() {
+          try {
+            const result = await reader.read();
+            if (result.done) reader.releaseLock();
+            return result;
+          } catch (e) {
+            reader.releaseLock();
+            throw e;
+          }
+        },
+        async return(value?: unknown) {
+          if (!preventCancel) {
+            const cancelled = reader.cancel(value);
+            reader.releaseLock();
+            await cancelled;
+          } else {
+            reader.releaseLock();
+          }
+          return { done: true, value };
+        },
+        [Symbol.asyncIterator]() {
+          return this;
+        },
+      };
+    };
+    (ReadableStream.prototype as any)[Symbol.asyncIterator] = (
+      ReadableStream.prototype as any
+    ).values;
+  }
+
   /* eslint-enable @typescript-eslint/no-explicit-any */
 
   // --- Uint8Array.toHex / toBase64 ------------------------------------------
@@ -169,6 +211,36 @@ if (typeof URL.parse !== "function") {
   URL.parse = function (url, base) {
     try { return new URL(url, base); } catch (e) { return null; }
   };
+}
+if (typeof ReadableStream !== "undefined" && !ReadableStream.prototype[Symbol.asyncIterator]) {
+  ReadableStream.prototype.values = function (opts) {
+    const preventCancel = !!(opts && opts.preventCancel);
+    const reader = this.getReader();
+    return {
+      async next() {
+        try {
+          const result = await reader.read();
+          if (result.done) reader.releaseLock();
+          return result;
+        } catch (e) {
+          reader.releaseLock();
+          throw e;
+        }
+      },
+      async return(value) {
+        if (!preventCancel) {
+          const cancelled = reader.cancel(value);
+          reader.releaseLock();
+          await cancelled;
+        } else {
+          reader.releaseLock();
+        }
+        return { done: true, value };
+      },
+      [Symbol.asyncIterator]() { return this; }
+    };
+  };
+  ReadableStream.prototype[Symbol.asyncIterator] = ReadableStream.prototype.values;
 }
 if (typeof Uint8Array.prototype.toHex !== "function") {
   Uint8Array.prototype.toHex = function () {
