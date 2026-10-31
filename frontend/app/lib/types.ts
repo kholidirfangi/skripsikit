@@ -11,10 +11,18 @@ export type DocumentParagraph = {
   style: string;
 };
 
+export type TOCHeading = {
+  text: string;
+  level: number;
+  type?: string;
+};
+
 export type DetectResponse = {
   file_id: string;
   section_points: SectionPoint[];
   available_paragraphs?: DocumentParagraph[];
+  toc_headings?: TOCHeading[];
+  toc_detected_count?: number;
 };
 
 export type SummaryItem = {

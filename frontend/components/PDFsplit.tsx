@@ -8,7 +8,18 @@ import { FileText, Plus, RefreshCw, Trash2, Upload } from "lucide-react";
 import type { TransferFile } from "../app/lib/types";
 
 // ---------------------------------------------------------------------------
-// Polyfill Uint8Array.toHex/toBase64 (dibutuhkan pdfjs-dist 5.x)
+// Polyfill untuk browser lama (Chrome 109 / Windows 7)
+//
+// pdfjs-dist 4.x/5.x memakai fitur JavaScript baru yang belum ada di Chrome 109:
+//   - Promise.withResolvers  (Chrome 119)
+//   - Promise.try            (Chrome 128)
+//   - Object.groupBy         (Chrome 117)
+//   - Array.fromAsync        (Chrome 121)
+//   - URL.parse              (Chrome 126)
+//   - Uint8Array toHex/toBase64/fromHex/fromBase64
+//
+// Polyfill dipasang di DUA tempat: main thread (ensurePolyfills)
+// dan worker (WORKER_POLYFILL_SRC, disisipkan di depan kode worker).
 // ---------------------------------------------------------------------------
 interface Uint8ArrayHexBase64Proto {
   toHex?: () => string;
@@ -19,9 +30,79 @@ interface Uint8ArrayHexBase64Ctor {
   fromBase64?: (b64: string) => Uint8Array;
 }
 
-function ensureTypedArrayPolyfills() {
+function ensurePolyfills() {
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+
+  // --- Promise.withResolvers ------------------------------------------------
+  const P = Promise as any;
+  if (typeof P.withResolvers !== "function") {
+    P.withResolvers = function () {
+      let resolve: (value?: unknown) => void = () => {};
+      let reject: (reason?: unknown) => void = () => {};
+      const promise = new Promise((res, rej) => {
+        resolve = res;
+        reject = rej;
+      });
+      return { promise, resolve, reject };
+    };
+  }
+
+  // --- Promise.try ----------------------------------------------------------
+  if (typeof P.try !== "function") {
+    P.try = function (fn: (...a: unknown[]) => unknown, ...args: unknown[]) {
+      return new Promise((resolve) => resolve(fn(...args)));
+    };
+  }
+
+  // --- Object.groupBy -------------------------------------------------------
+  const O = Object as any;
+  if (typeof O.groupBy !== "function") {
+    O.groupBy = function (
+      items: Iterable<unknown>,
+      cb: (item: unknown, index: number) => PropertyKey,
+    ) {
+      const out: Record<PropertyKey, unknown[]> = Object.create(null);
+      let i = 0;
+      for (const item of items) {
+        const key = cb(item, i++);
+        (out[key] || (out[key] = [])).push(item);
+      }
+      return out;
+    };
+  }
+
+  // --- Array.fromAsync ------------------------------------------------------
+  const A = Array as any;
+  if (typeof A.fromAsync !== "function") {
+    A.fromAsync = async function (source: any) {
+      const out: unknown[] = [];
+      if (source && typeof source[Symbol.asyncIterator] === "function") {
+        for await (const item of source) out.push(item);
+      } else {
+        for (const item of source) out.push(await item);
+      }
+      return out;
+    };
+  }
+
+  // --- URL.parse ------------------------------------------------------------
+  const U = URL as any;
+  if (typeof U.parse !== "function") {
+    U.parse = function (url: string, base?: string) {
+      try {
+        return new URL(url, base);
+      } catch {
+        return null;
+      }
+    };
+  }
+
+  /* eslint-enable @typescript-eslint/no-explicit-any */
+
+  // --- Uint8Array.toHex / toBase64 ------------------------------------------
   const proto = Uint8Array.prototype as unknown as Uint8ArrayHexBase64Proto;
   const ctor = Uint8Array as unknown as Uint8ArrayHexBase64Ctor;
+
   if (typeof proto.toHex !== "function") {
     proto.toHex = function (this: Uint8Array) {
       return Array.from(this, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -48,7 +129,47 @@ function ensureTypedArrayPolyfills() {
   }
 }
 
+// Versi string untuk Web Worker (worker tidak ikut polyfill main thread).
 const WORKER_POLYFILL_SRC = `
+if (typeof Promise.withResolvers !== "function") {
+  Promise.withResolvers = function () {
+    let resolve, reject;
+    const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  };
+}
+if (typeof Promise.try !== "function") {
+  Promise.try = function (fn, ...args) {
+    return new Promise((resolve) => resolve(fn(...args)));
+  };
+}
+if (typeof Object.groupBy !== "function") {
+  Object.groupBy = function (items, cb) {
+    const out = Object.create(null);
+    let i = 0;
+    for (const item of items) {
+      const key = cb(item, i++);
+      (out[key] || (out[key] = [])).push(item);
+    }
+    return out;
+  };
+}
+if (typeof Array.fromAsync !== "function") {
+  Array.fromAsync = async function (source) {
+    const out = [];
+    if (source && typeof source[Symbol.asyncIterator] === "function") {
+      for await (const item of source) out.push(item);
+    } else {
+      for (const item of source) out.push(await item);
+    }
+    return out;
+  };
+}
+if (typeof URL.parse !== "function") {
+  URL.parse = function (url, base) {
+    try { return new URL(url, base); } catch (e) { return null; }
+  };
+}
 if (typeof Uint8Array.prototype.toHex !== "function") {
   Uint8Array.prototype.toHex = function () {
     return Array.from(this, (b) => b.toString(16).padStart(2, "0")).join("");
@@ -77,8 +198,9 @@ if (typeof Uint8Array.prototype.toBase64 !== "function") {
 let pdfjsPromise: Promise<typeof PdfJsLib> | null = null;
 
 async function getPatchedWorkerUrl(): Promise<string> {
+  // Worker harus versi LEGACY, sama dengan modul utama.
   const originalUrl = new URL(
-    "pdfjs-dist/build/pdf.worker.min.mjs",
+    "pdfjs-dist/legacy/build/pdf.worker.min.mjs",
     import.meta.url,
   ).toString();
   const res = await fetch(originalUrl);
@@ -91,8 +213,11 @@ async function getPatchedWorkerUrl(): Promise<string> {
 
 function getPdfjs() {
   if (!pdfjsPromise) {
-    ensureTypedArrayPolyfills();
-    pdfjsPromise = import("pdfjs-dist").then(async (mod) => {
+    ensurePolyfills();
+    // Build legacy dikompilasi untuk browser lebih tua (Chrome 109).
+    pdfjsPromise = (
+      import("pdfjs-dist/legacy/build/pdf.mjs") as Promise<typeof PdfJsLib>
+    ).then(async (mod) => {
       mod.GlobalWorkerOptions.workerSrc = await getPatchedWorkerUrl();
       return mod;
     });
@@ -256,7 +381,6 @@ function detectBab(lines: PageLines): string | null {
 type Lang = "id" | "en";
 
 // Detect language based on BAB/CHAPTER usage in the first 12 lines of each page.
-
 function detectLang(pages: PageLines[]): Lang {
   let id = 0;
   let en = 0;
@@ -378,6 +502,7 @@ function findPustakaPage(pages: PageLines[], startPage: number): number | null {
 
 // ---------------------------------------------------------------------------
 // LAMPIRAN
+// ---------------------------------------------------------------------------
 
 // LAMPIRAN, LAMPIRAN 1, LAMPIRAN A, LAMPIRAN-LAMPIRAN, APPENDIX, APPENDIX A,
 // APPENDICES, "APPENDIX A: Questionnaire"

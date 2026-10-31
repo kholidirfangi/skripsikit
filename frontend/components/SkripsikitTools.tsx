@@ -11,6 +11,10 @@ import {
   Download,
   Plus,
   Search,
+  BookOpen,
+  ChevronDown,
+  ChevronUp,
+  Info,
 } from "lucide-react";
 import {
   SectionPoint,
@@ -48,6 +52,8 @@ export default function SkripsiKitTool() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedParaIndex, setSelectedParaIndex] = useState<number | null>(null);
   const [selectedType, setSelectedType] = useState<"BAB" | "BACK_MATTER">("BAB");
+  const [generateToc, setGenerateToc] = useState(true);
+  const [showTocPreview, setShowTocPreview] = useState(false);
 
   function resetAll() {
     setStep("upload");
@@ -60,6 +66,8 @@ export default function SkripsiKitTool() {
     setSearchQuery("");
     setSelectedParaIndex(null);
     setSelectedType("BAB");
+    setGenerateToc(true);
+    setShowTocPreview(false);
   }
 
   function handleAddPoint() {
@@ -139,6 +147,7 @@ export default function SkripsiKitTool() {
       const formData = new FormData();
       formData.append("file_id", detectResult.file_id);
       formData.append("section_points", JSON.stringify(sectionPoints));
+      formData.append("generate_toc", generateToc ? "true" : "false");
 
       const res = await fetch(`${API_URL}/api/process`, {
         method: "POST",
@@ -293,6 +302,96 @@ export default function SkripsiKitTool() {
             )}
           </ul>
 
+          {/* Pengaturan Daftar Isi Otomatis */}
+          <div className="border-t border-slate-100 p-6 bg-slate-50/50 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center shrink-0 mt-0.5">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <label htmlFor="toggle-toc" className="font-semibold text-sm text-slate-900 cursor-pointer">
+                      Generate Daftar Isi Otomatis
+                    </label>
+                    {detectResult.toc_detected_count !== undefined && (
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                        {detectResult.toc_detected_count} heading terdeteksi
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Otomatis membuat atau memperbarui halaman Daftar Isi dengan hierarki BAB dan subbab (1.1, 1.2, dst.) berformat standar skripsi.
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
+                <input
+                  id="toggle-toc"
+                  type="checkbox"
+                  checked={generateToc}
+                  onChange={(e) => setGenerateToc(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+              </label>
+            </div>
+
+            {generateToc && (
+              <div className="space-y-3 pt-1">
+                {/* Catatan sinkronisasi Word */}
+                <div className="flex items-start gap-2.5 p-3 text-xs rounded-xl bg-blue-50/70 border border-blue-100 text-blue-800">
+                  <Info className="w-4 h-4 shrink-0 text-blue-600 mt-0.5" />
+                  <p>
+                    Daftar Isi disematkan menggunakan Microsoft Word native TOC field. Nomor halaman presisi akan otomatis disinkronkan oleh Microsoft Word saat file dibuka (pilih <strong>&quot;Yes&quot;</strong> saat Word menanyakan perbaruan field).
+                  </p>
+                </div>
+
+                {/* Accordion Preview Heading Daftar Isi */}
+                {detectResult.toc_headings && detectResult.toc_headings.length > 0 && (
+                  <div className="border border-slate-200 rounded-xl bg-white overflow-hidden text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setShowTocPreview(!showTocPreview)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 bg-slate-50 hover:bg-slate-100 text-slate-700 font-medium transition-colors"
+                    >
+                      <span>Preview Struktur Heading Daftar Isi ({detectResult.toc_headings.length})</span>
+                      {showTocPreview ? (
+                        <ChevronUp className="w-4 h-4 text-slate-500" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-slate-500" />
+                      )}
+                    </button>
+                    {showTocPreview && (
+                      <ul className="max-h-48 overflow-y-auto divide-y divide-slate-100 p-2">
+                        {detectResult.toc_headings.map((h, i) => (
+                          <li
+                            key={i}
+                            className="py-1 px-2 flex items-center gap-2 hover:bg-slate-50 rounded"
+                            style={{ paddingLeft: `${(h.level - 1) * 16 + 8}px` }}
+                          >
+                            <span
+                              className={`text-[10px] font-mono px-1.5 py-0.2 rounded border ${
+                                h.level === 1
+                                  ? "bg-purple-50 text-purple-700 border-purple-200 font-semibold"
+                                  : h.level === 2
+                                  ? "bg-slate-100 text-slate-700 border-slate-200"
+                                  : "bg-gray-50 text-gray-500 border-gray-200"
+                              }`}
+                            >
+                              L{h.level}
+                            </span>
+                            <span className="truncate text-slate-800">{h.text}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="px-6 py-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
             <button
               onClick={resetAll}
@@ -352,8 +451,8 @@ export default function SkripsiKitTool() {
                   type="button"
                   onClick={() => setSelectedType("BAB")}
                   className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${selectedType === "BAB"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                 >
                   <span className="font-semibold block">BAB</span>
@@ -363,8 +462,8 @@ export default function SkripsiKitTool() {
                   type="button"
                   onClick={() => setSelectedType("BACK_MATTER")}
                   className={`px-3 py-2 text-xs font-medium rounded-lg border text-left transition-colors ${selectedType === "BACK_MATTER"
-                      ? "border-blue-500 bg-blue-50 text-blue-700"
-                      : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    ? "border-blue-500 bg-blue-50 text-blue-700"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
                     }`}
                 >
                   <span className="font-semibold block">Lampiran / Pustaka</span>
@@ -416,8 +515,8 @@ export default function SkripsiKitTool() {
                         key={p.index}
                         onClick={() => setSelectedParaIndex(p.index)}
                         className={`p-2.5 text-xs cursor-pointer transition-colors ${isSelected
-                            ? "bg-blue-50 text-blue-900 border-l-4 border-blue-600"
-                            : "hover:bg-slate-50 text-slate-700"
+                          ? "bg-blue-50 text-blue-900 border-l-4 border-blue-600"
+                          : "hover:bg-slate-50 text-slate-700"
                           }`}
                       >
                         <div className="flex items-center justify-between gap-2">
